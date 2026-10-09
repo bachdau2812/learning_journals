@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Generated build and browser-test artifacts
+/dist/
+/test-results/
+/playwright-report/
+/coverage/
+
+# Local research and planning files
+/docs/
+/interview_learning_journal.txt
