@@ -1,9 +1,4 @@
-import {
-  CHECKLISTS,
-  CS_KNOWLEDGE_CHECKLIST,
-  CS_LAB_CHECKLIST,
-  DSA_CHECKLIST,
-} from './checklists';
+import { CHECKLISTS } from './checklists';
 
 export const JOURNAL_TYPES = Object.freeze([
   'dsa-problem-solving', 'dsa-concept-learning', 'dsa-review',
@@ -18,27 +13,15 @@ const makeId = (prefix = 'journal') => {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 };
 
-function cloneAnswers(checklist) {
-  return checklist.map(({ questionId }) => ({ questionId, status: 'todo', text: '' }));
-}
-
-export function getJournalTemplate({ domain = 'others', layer = null, journalType = 'others', topicId = null, problemId = null, topicQuestions = [] } = {}) {
-  let checklist = CHECKLISTS[journalType] ?? [];
-  if (domain === 'dsa') checklist = DSA_CHECKLIST;
-  if (domain === 'cs' && journalType === 'cs-knowledge') checklist = CS_KNOWLEDGE_CHECKLIST;
-  if (domain === 'cs' && journalType === 'cs-lab') checklist = CS_LAB_CHECKLIST;
-  const copied = checklist.map((item) => ({ ...item }));
-  if (['cs', 'system-design', 'dsa'].includes(domain)) {
-    topicQuestions.forEach((text, index) => copied.push({ questionId: `${domain}.topic.${topicId ?? 'general'}.${index + 1}`, text }));
-  }
+export function getJournalTemplate({ domain = 'others', layer = null, journalType = 'others', topicId = null, problemId = null } = {}) {
   return {
     domain,
     layer,
     journalType,
     topicId,
     problemId,
-    checklist: copied,
-    questionAnswers: cloneAnswers(copied),
+    checklist: [],
+    questionAnswers: [],
     header: '',
     studyDate: '',
     takeaway: '',
@@ -47,6 +30,35 @@ export function getJournalTemplate({ domain = 'others', layer = null, journalTyp
     reviewStatus: 'not-reviewed',
     reviewDate: null,
   };
+}
+
+export function addJournalQuestion(journal) {
+  const questionId = makeId('question');
+  return {
+    checklist: [...(journal.checklist ?? []), { questionId, text: '' }],
+    questionAnswers: [...(journal.questionAnswers ?? []), { questionId, status: 'todo', text: '' }],
+  };
+}
+
+export function removeJournalQuestion(journal, questionId) {
+  return {
+    checklist: (journal.checklist ?? []).filter((item) => item.questionId !== questionId),
+    questionAnswers: (journal.questionAnswers ?? []).filter((answer) => answer.questionId !== questionId),
+  };
+}
+
+export function restoreJournalQuestions(journal, topicQuestions = []) {
+  const checklist = [...(journal.checklist ?? [])];
+  const savedIds = new Set(checklist.map((item) => item.questionId));
+  const oldPrompts = new Map(Object.values(CHECKLISTS).flat().map((item) => [item.questionId, item.text]));
+  topicQuestions.forEach((text, index) => oldPrompts.set(`${journal.domain}.topic.${journal.topicId ?? 'general'}.${index + 1}`, text));
+  // Recover only questions with persisted answers; never insert fresh defaults.
+  for (const answer of journal.questionAnswers ?? []) {
+    if (savedIds.has(answer.questionId)) continue;
+    checklist.push({ questionId: answer.questionId, text: oldPrompts.get(answer.questionId) ?? answer.questionId });
+    savedIds.add(answer.questionId);
+  }
+  return { ...journal, checklist };
 }
 
 export function createJournal(input = {}, now = new Date().toISOString()) {
@@ -116,4 +128,4 @@ export function deleteCustomProblem(data, problemId, { confirm = false } = {}) {
   return { ...data, customProblems: problems.filter((problem) => problem.id !== problemId) };
 }
 
-export { DSA_CHECKLIST, CS_KNOWLEDGE_CHECKLIST, CS_LAB_CHECKLIST };
+export { DSA_CHECKLIST, CS_KNOWLEDGE_CHECKLIST, CS_LAB_CHECKLIST } from './checklists';

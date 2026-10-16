@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { catalogById, getAncestors, getChildren, getNode } from './index';
+import { buildCatalog, catalogById, getActiveNode, getAncestors, getChildren, getNode } from './index';
+import { systemDesignNodes } from './system-design';
+import { csFundamentalsNodes } from './cs-fundamentals';
+import { expandInterviewCatalog } from './interview-topics';
 import { systemDesignChecklists } from './system-design';
 import { DSA_BEST_PRACTICES_ID, DSA_GROUP_IDS, DSA_PATTERN_IDS } from './ids';
 
@@ -96,6 +99,41 @@ describe('catalog helpers', () => {
     expect(getAncestors('dsa')).toEqual([]);
     expect(getAncestors('array-hashing').map((node) => node.id)).toEqual(['dsa', 'dsa-arrays-strings']);
     expect(getAncestors('missing')).toEqual([]);
+  });
+});
+
+describe('major topic navigation', () => {
+  const original = expandInterviewCatalog([...systemDesignNodes, ...csFundamentalsNodes]);
+  const groups = original.filter((node) => ['system-design', 'cs-fundamentals'].includes(node.parentId));
+
+  it.each(groups.map((group) => [group.id, group.children]))('retains the current immediate topics in %s without built-in grandchildren', (groupId, children) => {
+    const topics = getChildren(groupId);
+    expect(topics.map((node) => node.id)).toEqual(children);
+    topics.forEach((node) => {
+      expect(node.isArchived).not.toBe(true);
+      expect(getChildren(node.id)).toEqual([]);
+      expect(node.children).toEqual([]);
+    });
+  });
+
+  it('keeps removed built-ins available for historical lookup and resolves their active ancestor', () => {
+    expect(getNode('lld-oop-fundamentals--encapsulation-invariants')).toMatchObject({ isArchived: true });
+    expect(getActiveNode('lld-oop-fundamentals--encapsulation-invariants').id).toBe('lld-oop-fundamentals');
+    expect(getActiveNode('lld-pattern-strategy').id).toBe('lld-design-patterns');
+    expect(getActiveNode('cs-networking-tcp-udp--handshake-reliability').id).toBe('cs-networking-tcp-udp');
+    expect(getActiveNode('missing')).toBeNull();
+  });
+
+  it('preserves custom branches beneath removed built-ins without mutating stored topics', () => {
+    const custom = { id: 'custom-topic', parentId: 'lld-pattern-strategy', domain: 'system-design', type: 'topic', title: 'My strategy study', isCustom: true, children: [] };
+    const nested = { ...custom, id: 'custom-nested', parentId: custom.id, title: 'My experiment' };
+    const data = { customTopics: [nested, custom], journalEntries: [{ id: 'old-note', topicId: 'lld-pattern-strategy' }] };
+    const catalog = buildCatalog(data);
+    expect(getChildren('lld-design-patterns', catalog).map((node) => node.id)).toEqual([custom.id]);
+    expect(getChildren(custom.id, catalog).map((node) => node.id)).toEqual([nested.id]);
+    expect(getAncestors(nested.id, catalog).map((node) => node.id)).toEqual(['system-design', 'system-design-lld', 'lld-design-patterns', custom.id]);
+    expect(custom.parentId).toBe('lld-pattern-strategy');
+    expect(data.journalEntries[0].topicId).toBe('lld-pattern-strategy');
   });
 });
 

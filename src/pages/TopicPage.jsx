@@ -12,7 +12,7 @@ import SpatialLink, { setSpatialDirection, SpatialEntryPlane } from '../componen
 export default function TopicPage() {
   const { topicId } = useParams();
   const [params] = useSearchParams();
-  const { getAncestors, getChildren, getNode } = useCatalog();
+  const { getActiveNode, getAncestors, getChildren, getNode } = useCatalog();
   const topic = getNode(topicId);
   const navigate = useNavigate();
   const appData = useAppData();
@@ -20,6 +20,7 @@ export default function TopicPage() {
   const entries = useMemo(() => sortJournals((appData?.data?.journalEntries ?? []).filter((entry) =>
     (entry.topicId === topicId || entry.problemId === topicId) && normalizeSearchText(entry.header).includes(normalizeSearchText(query))), 'recently-updated'), [appData?.data?.journalEntries, topicId, query]);
   if (!topic) return <NotFoundPage />;
+  if (topic.isArchived) return <Navigate to={`/topics/${getActiveNode(topic.id).id}`} replace />;
   const hasChildren = getChildren(topic.id).length > 0;
   if (hasChildren && params.get('view') !== 'journals') return <Navigate to={`/browse/${topic.id}`} replace />;
   const parent = getAncestors(topic.id).at(-1);

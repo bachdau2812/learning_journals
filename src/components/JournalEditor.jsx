@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { ArrowLeft, Check, LoaderCircle, AlertCircle, Bookmark, Link2, Feather, Plus } from 'lucide-react';
 import ChecklistEditor from './ChecklistEditor';
 import { journalTypeLabel } from '../domain/journals/presentation';
+import { addJournalQuestion, removeJournalQuestion } from '../domain/journals/journal';
 
 function Field({ label, name, value, onChange, ...props }) {
   return <label className="journal-field"><span>{label}</span><input name={name} value={value ?? ''} onChange={(event) => onChange(name, event.target.value)} {...props} /></label>;
@@ -30,7 +31,7 @@ const artifactFields = {
   lab: [['commands', 'Commands'], ['sourceCode', 'Source code'], ['environment', 'Environment'], ['testData', 'Test data'], ['logs', 'Logs'], ['measurements', 'Measurements'], ['conclusion', 'Conclusion']],
 };
 
-export default function JournalEditor({ journal, topic, checklist, saveStatus, saveError, customProblemError, onCreateCustomProblem, onChange, onBack }) {
+export default function JournalEditor({ journal, topic, checklist, saveStatus, saveError, customProblemError, onCreateCustomProblem, onChange, onQuestionsChange, onBack }) {
   const updateAnswer = useCallback((questionId, patch) => {
     const answers = (journal.questionAnswers ?? []).map((answer) => answer.questionId === questionId ? { ...answer, ...patch } : answer);
     if (!answers.some((answer) => answer.questionId === questionId)) answers.push({ questionId, status: 'todo', text: '', ...patch });
@@ -57,7 +58,7 @@ export default function JournalEditor({ journal, topic, checklist, saveStatus, s
           <h1 id="journal-title" className="sr-only">Journal entry</h1>
           <JournalTitle value={journal.header} onChange={onChange} />
         </header>
-        {focus ? <details className="editor-interview-focus"><summary>{topic.isCustom ? 'Your topic context' : 'Interview focus & references'}</summary><div>{focus.scenario ? <p>{focus.scenario}</p> : null}{focus.followUp ? <p className="interview-follow-up"><span>Follow-up</span>{focus.followUp}</p> : null}{sourceLinks.length ? <ul>{sourceLinks.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.label}<Link2 size={13} aria-hidden="true" /></a></li>)}</ul> : null}</div></details> : null}
+        {focus ? <details className="editor-interview-focus"><summary>{topic.isCustom ? 'Your topic context' : 'Interview focus & references'}</summary><div>{focus.scenario ? <p>{focus.scenario}</p> : null}{sourceLinks.length ? <ul>{sourceLinks.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.label}<Link2 size={13} aria-hidden="true" /></a></li>)}</ul> : null}</div></details> : null}
         <section className="journal-section editor-metadata" aria-label="Journal information">
           <div className="journal-form-grid">
             <Field label="Study date" name="studyDate" type="date" value={journal.studyDate} onChange={onChange} required />
@@ -79,17 +80,24 @@ export default function JournalEditor({ journal, topic, checklist, saveStatus, s
         {journal.domain === 'dsa' && journal.journalType === 'dsa-problem-solving' && !journal.problemId ? <details className="custom-problem-form"><summary><Plus size={16} aria-hidden="true" /> Add a custom problem</summary><div className="journal-form-grid">
           <Field label="Problem title" name="problemTitle" value={journal.problemTitle} onChange={onChange} /><Field label="Problem URL" name="problemUrl" type="url" value={journal.problemUrl} onChange={onChange} placeholder="https://..." /><Field label="Difficulty" name="difficulty" value={journal.difficulty} onChange={onChange} placeholder="Easy, Medium, or Hard" /><Field label="Pattern IDs" name="patternIdsText" value={journal.patternIdsText} onChange={onChange} placeholder="arrays, two-pointers" />
         </div><button className="button" type="button" onClick={onCreateCustomProblem}>Save custom problem</button>{customProblemError ? <p className="journal-error" role="alert">{customProblemError}</p> : null}</details> : null}
-        {checklist.length ? <section className="journal-section editor-answers"><div className="editor-section-heading"><span>Think it through</span><span>{completed}/{checklist.length} complete</span></div><ChecklistEditor checklist={checklist} answers={journal.questionAnswers} onChange={updateAnswer} /></section> : null}
+        <section className="journal-section editor-answers" aria-label="Your questions">
+          <div className="editor-section-heading"><span>Your questions</span>{checklist.length ? <span>{completed}/{checklist.length} complete</span> : null}</div>
+          {checklist.length ? (
+            <ChecklistEditor
+              checklist={checklist}
+              answers={journal.questionAnswers}
+              onChange={updateAnswer}
+              onQuestionChange={(questionId, text) => onChange('checklist', checklist.map((item) => item.questionId === questionId ? { ...item, text } : item))}
+              onRemove={(questionId) => onQuestionsChange(removeJournalQuestion(journal, questionId))}
+            />
+          ) : <p className="muted journal-questions-empty">Add a question you want to explore, then write your answer.</p>}
+          <button className="button journal-add-question" type="button" onClick={() => onQuestionsChange(addJournalQuestion(journal))}><Plus size={17} aria-hidden="true" />Add question</button>
+        </section>
         <section className="journal-section journal-form-stack editor-reflections" aria-label="Reflections">
           <label className="journal-field"><span className="editor-field-heading"><Bookmark size={17} aria-hidden="true" />Key takeaways</span><textarea rows="5" placeholder="The ideas you want to remember." value={journal.takeaway ?? ''} onChange={(event) => onChange('takeaway', event.target.value)} /></label>
-          <label className="journal-field"><span className="editor-field-heading"><Feather size={17} aria-hidden="true" />Others</span><textarea rows="4" placeholder="A question, a sketch of an idea, something to explore next..." value={journal.others ?? ''} onChange={(event) => onChange('others', event.target.value)} /></label>
           <label className="journal-field"><span className="editor-field-heading"><Link2 size={17} aria-hidden="true" />References</span><textarea rows="2" placeholder="One URL or reference per line" value={(journal.references ?? []).join('\n')} onChange={(event) => onChange('references', event.target.value.split(/\n/))} /></label>
         </section>
         {artifacts ? <details className="editor-artifacts"><summary>Practice notes &amp; evidence</summary><div className="journal-form-stack">{artifacts.map(([name, label]) => <label className="journal-field" key={name}><span>{label}</span><textarea rows="3" value={journal[name] ?? ''} onChange={(event) => onChange(name, event.target.value)} /></label>)}</div></details> : null}
-        <section className="journal-section editor-review" aria-label="Review schedule"><div className="journal-form-grid">
-          <label className="journal-field"><span>Review status</span><select value={journal.reviewStatus ?? 'not-reviewed'} onChange={(event) => onChange('reviewStatus', event.target.value)}><option value="not-reviewed">Not reviewed</option><option value="needs-work">Needs work</option><option value="reviewed">Reviewed</option></select></label>
-          <Field label="Review date" name="reviewDate" type="date" value={journal.reviewDate} onChange={onChange} />
-        </div></section>
       </div>
       <div className="editor-bottom"><button className="button button--primary" type="button" onClick={onBack}><Check size={17} aria-hidden="true" /> Done</button></div>
     </main>

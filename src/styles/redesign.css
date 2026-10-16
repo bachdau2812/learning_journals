@@ -121,6 +121,18 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px soli
 .journal-checklist__prompt { grid-template-columns: 1fr 130px; gap: 20px; align-items: center; font-size: .9rem; line-height: 1.8; }
 .journal-checklist__prompt label::before { content: counter(journal-question, decimal-leading-zero); color: var(--color-accent); font-size: .72rem; font-weight: 700; margin-right: .65rem; }
 .journal-checklist select { padding: 8px; min-height: 44px; font-size: .68rem; }
+.journal-checklist__prompt .journal-question-field::before { content: none; }
+.journal-checklist__prompt .journal-question-field { min-width: 0; }
+.journal-question-actions { display: flex; align-items: center; gap: 6px; }
+.journal-question-actions select { min-width: 0; width: 100%; }
+.journal-checklist__prompt:has(.journal-question-actions) { grid-template-columns: minmax(0, 1fr) 170px; align-items: start; }
+.journal-question-actions .journal-action { flex-shrink: 0; min-width: 40px; min-height: 44px; }
+.journal-questions-empty { font-size: .85rem; line-height: 1.7; }
+.journal-add-question { margin-top: 20px; }
+@media (max-width: 639px) {
+  .journal-checklist__prompt:has(.journal-question-actions) { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .journal-question-actions { justify-self: end; max-width: 190px; }
+}
 .editor-reflections { gap: 28px; }
 .editor-field-heading { display: flex; align-items: center; gap: .65rem; color: var(--color-ink); font-size: .9rem; font-weight: 600; letter-spacing: -.025em; }
 .editor-reflections textarea { margin-top: 4px; }

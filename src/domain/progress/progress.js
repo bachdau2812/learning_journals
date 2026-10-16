@@ -20,7 +20,7 @@ export function calculateOverview(data = {}, catalog = {}) {
   const recentJournals = [...entries].sort((a, b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? ''))).slice(0, 5);
   const topicsToReview = entries.filter((entry) => reviewDue(entry, today));
   const topicCount = (domain) => new Set(domainEntries(entries, domain).map((entry) => entry.topicId).filter(Boolean)).size;
-  const catalogNodes = Object.values(catalog ?? {});
+  const catalogNodes = Object.values(catalog ?? {}).filter((node) => !node.isArchived);
   const countCatalog = (domain) => catalogNodes.filter((node) => node.domain === domain && (node.type === 'topic' || node.type === 'group')).length;
   return {
     dsa: { uniqueAttempted: countUniqueProblems(dsaEntries), uniqueSolved: countUniqueProblems(solved), totalAttempts: dsaEntries.length, independentSolveRate: knownResults.length ? solved.length / knownResults.length : null, pendingReviews: dsaEntries.filter((entry) => reviewDue(entry, today)).length },

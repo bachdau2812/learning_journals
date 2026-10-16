@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAppData } from '../../app/AppDataProvider';
-import { buildCatalog, getAncestors, getChildren, getNode } from './index';
+import { buildCatalog, getActiveNode, getAncestors, getChildren, getNode } from './index';
 
 export default function useCatalog() {
   const data = useAppData()?.data;
@@ -9,6 +9,7 @@ export default function useCatalog() {
     return {
       catalog,
       getNode: (id) => getNode(id, catalog),
+      getActiveNode: (id) => getActiveNode(id, catalog),
       getChildren: (id) => getChildren(id, catalog),
       getAncestors: (id) => getAncestors(id, catalog),
     };

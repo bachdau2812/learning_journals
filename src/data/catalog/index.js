@@ -3,7 +3,18 @@ import { systemDesignNodes } from './system-design';
 import { csFundamentalsNodes } from './cs-fundamentals';
 import { expandInterviewCatalog } from './interview-topics';
 
-const allNodes = expandInterviewCatalog([...dsaNodes, ...systemDesignNodes, ...csFundamentalsNodes]);
+const expandedNodes = expandInterviewCatalog([...dsaNodes, ...systemDesignNodes, ...csFundamentalsNodes]);
+const simplifiedRoots = new Set(['system-design', 'cs-fundamentals']);
+const groups = new Set(expandedNodes.filter((node) => simplifiedRoots.has(node.parentId)).map((node) => node.id));
+const retainedIds = new Set(expandedNodes.filter((node) =>
+  node.domain === 'dsa' || !node.parentId || simplifiedRoots.has(node.parentId) || groups.has(node.parentId),
+).map((node) => node.id));
+// Keep historical nodes resolvable without exposing their built-in subtrees.
+const allNodes = expandedNodes.map((node) => ({
+  ...node,
+  ...(!retainedIds.has(node.id) ? { isArchived: true } : {}),
+  children: retainedIds.has(node.id) ? node.children.filter((id) => retainedIds.has(id)) : [],
+}));
 
 function freezeNode(node) {
   const copy = { ...node };
@@ -41,6 +52,12 @@ export function getAncestors(id, catalog = catalogById) {
   return ancestors;
 }
 
+export function getActiveNode(id, catalog = catalogById) {
+  const node = getNode(id, catalog);
+  if (!node?.isArchived) return node;
+  return getAncestors(id, catalog).reverse().find((ancestor) => !ancestor.isArchived) ?? null;
+}
+
 export function buildCatalog(data = {}) {
   const catalog = Object.assign(Object.create(null), catalogById);
   const customNodes = [
@@ -57,10 +74,11 @@ export function buildCatalog(data = {}) {
   }
   for (const node of customNodes) {
     if (getNode(node.id, catalog)?.isCustom !== true) continue;
-    const parent = getNode(node.parentId, catalog);
+    const parent = getActiveNode(node.parentId, catalog);
     if (!parent || parent.domain !== node.domain || parent.id === node.id) continue;
     // Reject imported cycles without changing either built-in or stored nodes.
     if (getAncestors(parent.id, catalog).some((ancestor) => ancestor.id === node.id)) continue;
+    catalog[node.id] = { ...catalog[node.id], parentId: parent.id };
     catalog[parent.id] = { ...parent, children: [...new Set([...(parent.children ?? []), node.id])] };
   }
   return catalog;

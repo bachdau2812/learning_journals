@@ -31,7 +31,11 @@ test('creates a journal, finds it in the list, edits it, and reloads the deep li
 test('exports a journal backup, clears local storage, and restores with Replace', async ({ page }, testInfo) => {
   await page.goto('/journals/new?domain=cs&journalType=cs-lab');
   await page.getByLabel('Header').fill('Linux process lab');
+  await page.getByRole('button', { name: 'Add question' }).click();
+  await page.getByRole('textbox', { name: 'Question 1', exact: true }).fill('How do I inspect running processes?');
+  await page.getByRole('textbox', { name: 'Answer 1', exact: true }).fill('Use ps and top.');
   await expect(page.getByText(/Saved/)).toBeVisible();
+  const journalUrl = page.url();
 
   await page.goto('/settings');
   const downloadPromise = page.waitForEvent('download');
@@ -52,23 +56,94 @@ test('exports a journal backup, clears local storage, and restores with Replace'
   await expect(page.getByText('Local data replaced from backup.')).toBeVisible();
   await page.getByRole('link', { name: 'Journals' }).click();
   await expect(page.getByRole('heading', { name: 'Linux process lab' })).toBeVisible();
+  await page.goto(journalUrl);
+  await expect(page.getByRole('textbox', { name: 'Question 1', exact: true })).toHaveValue('How do I inspect running processes?');
+  await expect(page.getByRole('textbox', { name: 'Answer 1', exact: true })).toHaveValue('Use ps and top.');
   testInfo.attach('restored-backup.json', { path: backupPath, contentType: 'application/json' });
 });
 
 test('opens and refreshes topic and journal deep links', async ({ page }) => {
   await page.goto('/topics/lld-oop-fundamentals');
-  await expect(page.getByRole('main', { name: 'OOP Fundamentals' })).toBeVisible();
+  await expect(page.getByRole('main', { name: 'OOP Fundamentals journals' })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('main', { name: 'OOP Fundamentals' })).toBeVisible();
+  await expect(page.getByRole('main', { name: 'OOP Fundamentals journals' })).toBeVisible();
 
-  await page.getByRole('link', { name: /encapsulation/i }).click();
-  await expect(page.getByRole('main', { name: /encapsulation.*journals/i })).toBeVisible();
+  await expect(page.getByRole('link', { name: /encapsulation/i })).toHaveCount(0);
   await page.getByRole('button', { name: /new journal/i }).click();
   await page.getByLabel('Header').fill('OOP concepts');
   await expect(page.getByText(/Saved/)).toBeVisible();
   await page.waitForTimeout(900);
   await page.reload();
   await expect(page.getByLabel('Header')).toHaveValue('OOP concepts');
+});
+
+test('authors questions, removes one, changes metadata, reloads and duplicates without losing answers', async ({ page }) => {
+  await page.goto('/journals/new?domain=cs&topicId=cs-networking-tcp-udp&journalType=cs-knowledge');
+  await page.getByLabel('Header').fill('My network questions');
+  await expect(page.getByRole('textbox', { name: /^Question \d+$/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add question' }).click();
+  await page.getByRole('textbox', { name: 'Question 1', exact: true }).fill('What is TCP?');
+  await page.getByRole('textbox', { name: 'Answer 1', exact: true }).fill('A reliable byte stream.');
+  await page.getByRole('button', { name: 'Add question' }).click();
+  await page.getByRole('textbox', { name: 'Question 2', exact: true }).fill('Why use UDP?');
+  await page.getByRole('textbox', { name: 'Answer 2', exact: true }).fill('For independent datagrams.');
+  await page.getByLabel('Status for question 2').selectOption('done');
+  await page.getByRole('button', { name: 'Remove question 1' }).click();
+  await page.getByRole('combobox', { name: 'Domain', exact: true }).selectOption('system-design');
+  await page.getByRole('combobox', { name: 'System Design layer', exact: true }).selectOption('hld');
+  await page.getByRole('combobox', { name: 'Journal type', exact: true }).selectOption('system-design-hld-practice');
+  await expect(page.getByText(/^Saved$/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: /^Question \d+$/ })).toHaveCount(1);
+  await expect(page.getByRole('textbox', { name: 'Question 1', exact: true })).toHaveValue('Why use UDP?');
+  await expect(page.getByRole('textbox', { name: 'Answer 1', exact: true })).toHaveValue('For independent datagrams.');
+  await expect(page.getByLabel('Status for question 1')).toHaveValue('done');
+  await page.goto('/journals');
+  await page.locator('.journal-list__item').filter({ hasText: 'My network questions' }).getByRole('button', { name: 'Duplicate' }).click();
+  await expect(page.getByLabel('Header')).toHaveValue('My network questions (copy)');
+  await expect(page.getByRole('textbox', { name: 'Answer 1', exact: true })).toHaveValue('For independent datagrams.');
+  await page.getByRole('button', { name: 'Remove question 1' }).click();
+  await expect(page.getByText(/^Saved$/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: /^Question \d+$/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add question' })).toBeVisible();
+});
+
+test('opens major topics directly and redirects retired subtopic URLs', async ({ page }) => {
+  const topics = [
+    ['system-design-lld', 'OOP Fundamentals', 'lld-oop-fundamentals'],
+    ['system-design-hld', 'Requirements & Capacity Estimation', 'hld-requirements-capacity'],
+    ['system-design-distributed', 'Consistency & Replication', 'distributed-consistency-replication'],
+    ['cs-networking', 'TCP & UDP', 'cs-networking-tcp-udp'],
+  ];
+  for (const [groupId, , topicId] of topics) {
+    await page.goto(`/browse/${groupId}`);
+    const link = page.locator(`a[href="/topics/${topicId}"]`);
+    await expect(link).toBeVisible();
+    await link.click();
+    await expect(page.getByRole('button', { name: 'New journal', exact: true })).toBeVisible();
+    await expect(page.locator('.navigation-card')).toHaveCount(0);
+  }
+  await page.goto('/topics/lld-oop-fundamentals--encapsulation-invariants');
+  await expect(page).toHaveURL(/\/topics\/lld-oop-fundamentals$/);
+  await page.goto('/browse/cs-networking-tcp-udp--handshake-reliability');
+  await expect(page).toHaveURL(/\/topics\/cs-networking-tcp-udp$/);
+});
+
+test('question editor fits mobile and desktop widths', async ({ page }, testInfo) => {
+  await page.goto('/journals/new?domain=cs');
+  await page.getByRole('button', { name: 'Add question' }).click();
+  await page.getByRole('textbox', { name: 'Question 1', exact: true }).fill('How do distributed systems preserve ordering across concurrent writes?');
+  await page.getByRole('textbox', { name: 'Answer 1', exact: true }).fill('Explore ordering guarantees, failure cases and trade-offs.');
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.locator('.editor-answers').scrollIntoViewIfNeeded();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    const path = testInfo.outputPath(`questions-${width}.png`);
+    await page.screenshot({ path });
+    await testInfo.attach(`questions-${width}`, { path, contentType: 'image/png' });
+  }
 });
 
 test('uses responsive one and two column layouts without horizontal overflow', async ({ page }) => {

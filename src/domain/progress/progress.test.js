@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { calculateOverview, countUniqueProblems } from './progress';
 
 describe('learning progress', () => {
+  it('excludes archived catalog topics while preserving historical journal totals', () => {
+    const overview = calculateOverview({ journalEntries: [{ domain: 'cs', topicId: 'old', journalType: 'cs-knowledge' }] }, {
+      major: { domain: 'cs', type: 'topic' },
+      old: { domain: 'cs', type: 'topic', isArchived: true },
+    });
+    expect(overview.cs).toMatchObject({ topics: 1, notes: 1, catalogTopics: 1 });
+  });
   it('counts unique DSA problems separately from attempts', () => {
     const attempts = [{ problemId: 'p1' }, { problemId: 'p1' }, { problemId: 'p2' }];
     expect(countUniqueProblems(attempts)).toBe(2);
